@@ -1,0 +1,14 @@
+[Unit]
+Description=TCP Echo Server Socket
+
+[Socket]
+ListenStream=12345
+Backlog=9
+#not supporting spawning of service
+Accept=false
+# Freebind=true
+#redundant
+Service=echo-server.service
+
+[Install]
+WantedBy=sockets.target
