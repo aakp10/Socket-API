@@ -6,21 +6,48 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define LISTEN_BACKLOG 9
 #define MAXBUFLEN 80
 
 void
+get_greetings(char *greetings)
+{
+    time_t curtime = time(NULL);
+    struct tm *loc_time = localtime(&curtime);
+    char morning[] = "Good morning ";
+    char noon[] = "Good afternoon ";
+    char evening[] = "Good evening ";
+    char night[] = "Good night ";
+    if(loc_time->tm_hour >= 4 && loc_time->tm_hour < 12)
+        memcpy(greetings, morning, sizeof(morning));
+    else if(loc_time->tm_hour >= 12 && loc_time->tm_hour <17)
+        memcpy(greetings, noon, sizeof(morning));
+    else if(loc_time->tm_hour >= 17 && loc_time->tm_hour < 20)
+        memcpy(greetings, evening, sizeof(morning));
+    else if((loc_time->tm_hour >= 20 && loc_time->tm_hour <= 0) ||
+                ((loc_time->tm_hour >= 0 && loc_time->tm_hour < 4)))
+        memcpy(greetings, night, sizeof(morning));
+}
+
+void
 process_request(int connection_fd)
 {
     char r_buffer[MAXBUFLEN];
-    char w_buffer[MAXBUFLEN+10];
+    char w_buffer[MAXBUFLEN+20];
     ssize_t bytes_read;
+
+    char greetings[20];
+    get_greetings(greetings);
     while( (bytes_read = read(connection_fd, r_buffer, MAXBUFLEN)) > 0)
     {
-        memcpy(w_buffer,"G'morning",9);
-        strcat(w_buffer, r_buffer);
+        r_buffer[bytes_read] = '\0';
+        memcpy(w_buffer,greetings, sizeof(greetings));
+        strncat(w_buffer, r_buffer, strlen(r_buffer));
+        printf("\n %s",w_buffer);
         write(connection_fd, w_buffer, strlen(w_buffer));
+        printf("%s ", w_buffer);
     }
 }
 
