@@ -104,13 +104,7 @@ int write_to_server(int connection_fd)
 }
 int main(int argc, char **argv)
 {
-    uint16_t port;
-    int choice;
-    while((choice = getopt(argc, argv, "p:")) != -1)
-    {
-        if(choice == 'p')
-            port = atoi(optarg);
-    }
+    uint16_t port = 12345;
 
     int connection_fd = get_TCP_socket("0.0.0.0", port);
     write_to_server(connection_fd);

@@ -8,39 +8,17 @@
 #include <stdlib.h>
 #include <time.h>
 #include <getopt.h>
+#include <systemd/sd-daemon.h>
 
 #define LISTEN_BACKLOG 9
 #define MAXBUFLEN 80
 
 void
-get_greetings(char *greetings)
-{
-    time_t curtime = time(NULL);
-    struct tm *loc_time = localtime(&curtime);
-    char morning[] = "Good morning ";
-    char noon[] = "Good afternoon ";
-    char evening[] = "Good evening ";
-    char night[] = "Good night ";
-    if(loc_time->tm_hour >= 4 && loc_time->tm_hour < 12)
-        memcpy(greetings, morning, sizeof(morning));
-    else if(loc_time->tm_hour >= 12 && loc_time->tm_hour <17)
-        memcpy(greetings, noon, sizeof(morning));
-    else if(loc_time->tm_hour >= 17 && loc_time->tm_hour < 20)
-        memcpy(greetings, evening, sizeof(morning));
-    else if((loc_time->tm_hour >= 20 && loc_time->tm_hour <= 0) ||
-                ((loc_time->tm_hour >= 0 && loc_time->tm_hour < 4)))
-        memcpy(greetings, night, sizeof(morning));
-}
-
-void
 process_request(int connection_fd)
 {
     char r_buffer[MAXBUFLEN];
-    char w_buffer[MAXBUFLEN+20];
     ssize_t bytes_read;
 
-    char greetings[20];
-    get_greetings(greetings);
     /**
      * read data on the socket
      * fd: of the socket which is active in the data transfer or connected
@@ -50,17 +28,13 @@ process_request(int connection_fd)
     while( (bytes_read = read(connection_fd, r_buffer, MAXBUFLEN)) > 0)
     {
         r_buffer[bytes_read] = '\0';
-        memcpy(w_buffer,greetings, sizeof(greetings));
-        /*Just a hack to ignore newline*/
-        strncat(w_buffer, r_buffer, strlen(r_buffer)-1);
-        strncat(w_buffer, "!", 1);
     /**
      * Write to the socket
      * fd: of socket in estd connection
      * buffer ptr: stores the data to be written
      * len of buffer: how many bytes to be written across the socket
      */
-        write(connection_fd, w_buffer, strlen(w_buffer));
+        write(connection_fd, r_buffer, strlen(r_buffer));
         //printf("%s ", w_buffer);
     }
 }
@@ -68,62 +42,68 @@ process_request(int connection_fd)
 int
 start_server(uint16_t port)
 {
-    printf("port %d",port);
-    /*Get a socket fd for the listening socket*/
-    /**
-     * Get a socket-fd belonging to
-     * protocol Family : AF_INET: for IPv4
-     * semantics of communication: SOCK_STREAM (for TCP)
-     * which protocol to be used within the family : 0(If the family has 1 protocol supported
-     */
-    int listen_fd = socket(AF_INET /*domain of comm, for internet protocol ipv4*/, SOCK_STREAM, 0 /*which protocol to be supported within the family*/);
-    /* Get a socket fd for the socket after connection is estd*/
-    int connection_fd;
+    int sd_count;
+    int listen_fd, connection_fd;
     socklen_t len = sizeof(struct sockaddr_in);
-    /**
-     * sockaddr_in is socket address structure
-     * store the socket details like
-     * port
-     * family: AF_INET: IPv4 support
-     */
     /* Get a sock_addr struct*/
     struct sockaddr_in server_sockaddr, client_sockaddr;
-    /* 0 fill the socket addr struct*/
-    bzero(&server_sockaddr, sizeof(struct sockaddr_in));
-    /* Initialize the values in sock_addr with server related fields*/
-    server_sockaddr.sin_port = htons(port);
-    server_sockaddr.sin_family = htonl(INADDR_ANY);
-    /**
-     * Use this for setting any other IP on your network
-     */
-    /*int retval_pton = inet_pton(AF_INET, "0.0.0.0", &server_sockaddr.sin_addr);
-    if(retval_pton == 0)
+    if((sd_count = sd_listen_fds(0)) ==1)
     {
-        perror("Invalid format of IP");
-        return retval_pton;
+        listen_fd = SD_LISTEN_FDS_START + 0;
     }
-    else if(retval_pton == -1)
+    else
     {
-        perror("Failed to convert from presentation to network byte order");
-        return retval_pton;
-    }*/
+        /*Get a socket fd for the listening socket*/
+        /**
+         * Get a socket-fd belonging to
+         * protocol Family : AF_INET: for IPv4
+         * semantics of communication: SOCK_STREAM (for TCP)
+         * which protocol to be used within the family : 0(If the family has 1 protocol supported
+         */
+        listen_fd = socket(AF_INET /*domain of comm, for internet protocol ipv4*/, SOCK_STREAM, 0 /*which protocol to be supported within the family*/);
+        /* Get a socket fd for the socket after connection is estd*/
+        /**
+         * sockaddr_in is socket address structure
+         * store the socket details like
+         * port
+         * family: AF_INET: IPv4 support
+         */
+        /* 0 fill the socket addr struct*/
+        bzero(&server_sockaddr, sizeof(struct sockaddr_in));
+        /* Initialize the values in sock_addr with server related fields*/
+        server_sockaddr.sin_port = htons(port);
+        server_sockaddr.sin_family = htonl(INADDR_ANY);
+        /**
+         * Use this for setting any other IP on your network
+         */
+        /*int retval_pton = inet_pton(AF_INET, "0.0.0.0", &server_sockaddr.sin_addr);
+        if(retval_pton == 0)
+        {
+            perror("Invalid format of IP");
+            return retval_pton;
+        }
+        else if(retval_pton == -1)
+        {
+            perror("Failed to convert from presentation to network byte order");
+            return retval_pton;
+        }*/
 
-    server_sockaddr.sin_addr.s_addr = INADDR_ANY;
+        server_sockaddr.sin_addr.s_addr = INADDR_ANY;
 
-    /**
-     *bind the socket w/ socket addr struct server_sockaddr for listening i.e naming of the socket fd*
-     *listen_fd: fd to refer to the server's listening socket
-     *sockaddr_in : of the server's socket details
-     *sizeof sockaddr_in: to know number of bytes to be checked in the sock addr struct
-     */
-    bind(listen_fd, (const struct sockaddr *) &server_sockaddr, sizeof(server_sockaddr));
+        /**
+         *bind the socket w/ socket addr struct server_sockaddr for listening i.e naming of the socket fd*
+        *listen_fd: fd to refer to the server's listening socket
+        *sockaddr_in : of the server's socket details
+        *sizeof sockaddr_in: to know number of bytes to be checked in the sock addr struct
+        */
+        bind(listen_fd, (const struct sockaddr *) &server_sockaddr, sizeof(server_sockaddr));
 
-    /* ASsign passive status to listen_fd for listening to active connection requests
-     * with backlog queue length upto LISTEN_BACKLOG
-     * lsiten_fd: socket which was bound to the server sockaddr_in
-     */
-    listen(listen_fd, LISTEN_BACKLOG);
-
+        /* ASsign passive status to listen_fd for listening to active connection requests
+        * with backlog queue length upto LISTEN_BACKLOG
+        * lsiten_fd: socket which was bound to the server sockaddr_in
+        */
+        listen(listen_fd, LISTEN_BACKLOG);
+    }
     while(1)
     {
         /*Accept the first connection in the pending connection
@@ -155,14 +135,7 @@ start_server(uint16_t port)
 int main(int argc, char **argv)
 {
     int port;
-    int choice;
-    while((choice = getopt(argc, argv, "p:")) != -1)
-    {
-        if(choice == 'p')
-            port = atoi(optarg);
-    }
-
-    start_server(strtol(argv[1], NULL, 10));
+    start_server(1234);
     printf("Server Down");
     return 0;
 }
