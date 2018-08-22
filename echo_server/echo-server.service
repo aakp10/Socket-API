@@ -1,0 +1,10 @@
+[Unit]
+Description=Echo server service
+
+[Service]
+Type=forking
+ExecStart=/home/aakp/Socket-API/echo_server/server
+#Socket=echo-server.socket
+
+[Install]
+WantedBy=multi-user.target
