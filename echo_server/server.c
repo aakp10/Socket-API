@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <getopt.h>
 
 #define LISTEN_BACKLOG 9
 #define MAXBUFLEN 80
@@ -40,14 +41,27 @@ process_request(int connection_fd)
 
     char greetings[20];
     get_greetings(greetings);
+    /**
+     * read data on the socket
+     * fd: of the socket which is active in the data transfer or connected
+     * buffer ptr: to which the data read is stored
+     * len: bytes to be read into the buffer
+     */
     while( (bytes_read = read(connection_fd, r_buffer, MAXBUFLEN)) > 0)
     {
         r_buffer[bytes_read] = '\0';
         memcpy(w_buffer,greetings, sizeof(greetings));
-        strncat(w_buffer, r_buffer, strlen(r_buffer));
-        printf("\n %s",w_buffer);
+        /*Just a hack to ignore newline*/
+        strncat(w_buffer, r_buffer, strlen(r_buffer)-1);
+        strncat(w_buffer, "!", 1);
+    /**
+     * Write to the socket
+     * fd: of socket in estd connection
+     * buffer ptr: stores the data to be written
+     * len of buffer: how many bytes to be written across the socket
+     */
         write(connection_fd, w_buffer, strlen(w_buffer));
-        printf("%s ", w_buffer);
+        //printf("%s ", w_buffer);
     }
 }
 
@@ -56,11 +70,22 @@ start_server(uint16_t port)
 {
     printf("port %d",port);
     /*Get a socket fd for the listening socket*/
+    /**
+     * Get a socket-fd belonging to
+     * protocol Family : AF_INET: for IPv4
+     * semantics of communication: SOCK_STREAM (for TCP)
+     * which protocol to be used within the family : 0(If the family has 1 protocol supported
+     */
     int listen_fd = socket(AF_INET /*domain of comm, for internet protocol ipv4*/, SOCK_STREAM, 0 /*which protocol to be supported within the family*/);
     /* Get a socket fd for the socket after connection is estd*/
     int connection_fd;
     socklen_t len = sizeof(struct sockaddr_in);
-
+    /**
+     * sockaddr_in is socket address structure
+     * store the socket details like
+     * port
+     * family: AF_INET: IPv4 support
+     */
     /* Get a sock_addr struct*/
     struct sockaddr_in server_sockaddr, client_sockaddr;
     /* 0 fill the socket addr struct*/
@@ -85,11 +110,17 @@ start_server(uint16_t port)
 
     server_sockaddr.sin_addr.s_addr = INADDR_ANY;
 
-    /*bind the socket w/ socket addr struct server_sockaddr for listening i.e naming of the socket fd*/
+    /**
+     *bind the socket w/ socket addr struct server_sockaddr for listening i.e naming of the socket fd*
+     *listen_fd: fd to refer to the server's listening socket
+     *sockaddr_in : of the server's socket details
+     *sizeof sockaddr_in: to know number of bytes to be checked in the sock addr struct
+     */
     bind(listen_fd, (const struct sockaddr *) &server_sockaddr, sizeof(server_sockaddr));
 
     /* ASsign passive status to listen_fd for listening to active connection requests
      * with backlog queue length upto LISTEN_BACKLOG
+     * lsiten_fd: socket which was bound to the server sockaddr_in
      */
     listen(listen_fd, LISTEN_BACKLOG);
 
@@ -99,6 +130,9 @@ start_server(uint16_t port)
          *queue.
          *Creates a new socket and the fd to this new socket is stored 
          * in connetion_fd
+         * listen_fd: fd of the socket on which the server accepts connection req.
+         * client_sockaddr : ptr to store the peer sockaddr struct
+         * len: how many bytes to be filled into the peer sockect addr struct
          */
         connection_fd = accept(listen_fd, (struct sockaddr *) &client_sockaddr, &len);
         /*spawn the server*/
@@ -120,11 +154,14 @@ start_server(uint16_t port)
 
 int main(int argc, char **argv)
 {
-    if(argc != 2)
+    int port;
+    int choice;
+    while((choice = getopt(argc, argv, "p:")) != -1)
     {
-        printf("enter port number");
-        return 0;
+        if(choice == 'p')
+            port = atoi(optarg);
     }
+
     start_server(strtol(argv[1], NULL, 10));
     printf("Server Down");
     return 0;
