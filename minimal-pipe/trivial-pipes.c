@@ -33,6 +33,10 @@ int main()
         /* write this value to parent after processing */
         write(pipe_fd[C_WRITE], &value, sizeof(value));
         printf("child(%d): wrote %d\n", getpid(), value);
+        
+        close(pipe_fd[C_READ]);
+        close(pipe_fd[C_WRITE]);
+        
         exit(0);        
     }
     else {
@@ -45,6 +49,9 @@ int main()
         if(read(pipe_fd[P_READ], &value, sizeof(value)) > 0) {
             printf("parent(%d): read %d\n", getpid(), value);
         }
+        close(pipe_fd[P_READ]);
+        close(pipe_fd[P_WRITE]);
+        
         wait(NULL);
     }
     return 0;
