@@ -32,12 +32,12 @@ get_greetings(char *greetings)
     if(loc_time->tm_hour >= 4 && loc_time->tm_hour < 12)
         memcpy(greetings, morning, sizeof(morning));
     else if(loc_time->tm_hour >= 12 && loc_time->tm_hour <17)
-        memcpy(greetings, noon, sizeof(morning));
+        memcpy(greetings, noon, sizeof(noon));
     else if(loc_time->tm_hour >= 17 && loc_time->tm_hour < 20)
-        memcpy(greetings, evening, sizeof(morning));
+        memcpy(greetings, evening, sizeof(evening));
     else if((loc_time->tm_hour >= 20 && loc_time->tm_hour <= 24) ||
                 ((loc_time->tm_hour >= 0 && loc_time->tm_hour < 4)))
-        memcpy(greetings, night, sizeof(morning));
+        memcpy(greetings, night, sizeof(night));
 }
 
 void *
