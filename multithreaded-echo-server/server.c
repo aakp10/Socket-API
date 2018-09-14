@@ -35,7 +35,7 @@ get_greetings(char *greetings)
         memcpy(greetings, noon, sizeof(morning));
     else if(loc_time->tm_hour >= 17 && loc_time->tm_hour < 20)
         memcpy(greetings, evening, sizeof(morning));
-    else if((loc_time->tm_hour >= 20 && loc_time->tm_hour <= 0) ||
+    else if((loc_time->tm_hour >= 20 && loc_time->tm_hour <= 24) ||
                 ((loc_time->tm_hour >= 0 && loc_time->tm_hour < 4)))
         memcpy(greetings, night, sizeof(morning));
 }
@@ -52,7 +52,7 @@ process_request(void *sd)
     struct sockaddr_in *client_addr = connection_details->client_addr;
 
     get_greetings(greetings);
-    printf("%s \n", greetings);
+    //printf("%s \n", greetings);
     /**
      * read data on the socket
      * fd: of the socket which is active in the data transfer or connected
