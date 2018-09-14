@@ -13,6 +13,11 @@
 #define LISTEN_BACKLOG 9
 #define MAXBUFLEN 80
 
+struct thread_args{
+    int connection_fd;
+    struct sockaddr_in *client_addr;
+};
+
 int threads_created = 0;
 int active_threads = 0;
 void
@@ -42,17 +47,19 @@ process_request(void *sd)
     char w_buffer[MAXBUFLEN+20];
     ssize_t bytes_read;
     char greetings[20];
-    int *connection_fd = (int *)sd;
+    struct thread_args *connection_details = (struct thread_args*)sd;
+    int connection_fd = connection_details->connection_fd;
+    struct sockaddr_in *client_addr = connection_details->client_addr;
 
     get_greetings(greetings);
-    //printf("%s \n", greetings);
+    printf("%s \n", greetings);
     /**
      * read data on the socket
      * fd: of the socket which is active in the data transfer or connected
      * buffer ptr: to which the data read is stored
      * len: bytes to be read into the buffer
      */
-    while( (bytes_read = read(*connection_fd, r_buffer, MAXBUFLEN)) > 0)
+    while( (bytes_read = read(connection_fd, r_buffer, MAXBUFLEN)) > 0)
     {
         r_buffer[bytes_read] = '\0';
         memcpy(w_buffer,greetings, sizeof(greetings));
@@ -65,11 +72,12 @@ process_request(void *sd)
      * buffer ptr: stores the data to be written
      * len of buffer: how many bytes to be written across the socket
      */
-        write(*connection_fd, w_buffer, strlen(w_buffer));
+        write(connection_fd, w_buffer, strlen(w_buffer));
         //printf("%s \n", w_buffer);
     }
     active_threads--;
-    close(*connection_fd);
+    close(connection_fd);
+    printf("IP:%s:%d\n",inet_ntoa(client_addr->sin_addr), client_addr->sin_port);
     printf("Active Threads: %d Total Threads: %d\n", active_threads, threads_created);
     pthread_detach(pthread_self());
     return NULL;
@@ -97,7 +105,7 @@ start_server(uint16_t port)
      * family: AF_INET: IPv4 support
      */
     /* Get a sock_addr struct*/
-    struct sockaddr_in server_sockaddr, client_sockaddr;
+    struct sockaddr_in server_sockaddr;
     /* 0 fill the socket addr struct*/
     bzero(&server_sockaddr, sizeof(struct sockaddr_in));
     /* Initialize the values in sock_addr with server related fields*/
@@ -145,12 +153,17 @@ start_server(uint16_t port)
          * len: how many bytes to be filled into the peer sockect addr struct
          */
         int *connection_fd = (int *)malloc(sizeof(int));
-        *connection_fd = accept(listen_fd, (struct sockaddr *) &client_sockaddr, &len);
+        struct sockaddr_in *client_sockaddr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+        *connection_fd = accept(listen_fd, (struct sockaddr *) client_sockaddr, &len);
         /*spawn the server*/
         pthread_t tid;
         active_threads++;
         threads_created++;
-        pthread_create(&tid, NULL, process_request, (void*)connection_fd);
+
+        struct thread_args *t_details = (struct thread_args*)malloc(sizeof(struct thread_args));
+        t_details->connection_fd = *connection_fd;
+        t_details->client_addr = client_sockaddr;
+        pthread_create(&tid, NULL, process_request, (void*)t_details);
         printf("Active Threads: %d Total Threads: %d\n", active_threads, threads_created);
     }
     return 1;
