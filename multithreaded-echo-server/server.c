@@ -9,6 +9,7 @@
 #include <time.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <signal.h>
 
 #define LISTEN_BACKLOG 9
 #define MAXBUFLEN 80
@@ -20,6 +21,7 @@ struct thread_args{
 
 int threads_created = 0;
 int active_threads = 0;
+
 void
 get_greetings(char *greetings)
 {
@@ -40,9 +42,24 @@ get_greetings(char *greetings)
         memcpy(greetings, night, sizeof(night));
 }
 
+void
+decrement_athread(int signum)
+{
+    if(signum == SIGUSR1)
+        active_threads--;
+    printf("Active Threads: %d Total Threads: %d\n", active_threads, threads_created);
+}
 void *
 process_request(void *sd)
 {
+    /*
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
+
+    //pthread_sigmask(SIG_BLOCK, &set, NULL);
+    */
+
     char r_buffer[MAXBUFLEN];
     char w_buffer[MAXBUFLEN+20];
     ssize_t bytes_read;
@@ -75,11 +92,11 @@ process_request(void *sd)
         write(connection_fd, w_buffer, strlen(w_buffer));
         //printf("%s \n", w_buffer);
     }
-    active_threads--;
+    //active_threads--;
     close(connection_fd);
     printf("IP:%s:%d\n",inet_ntoa(client_addr->sin_addr), client_addr->sin_port);
-    printf("Active Threads: %d Total Threads: %d\n", active_threads, threads_created);
     pthread_detach(pthread_self());
+    raise(SIGUSR1);
     return NULL;
 }
 
@@ -141,6 +158,9 @@ start_server(uint16_t port)
      * lsiten_fd: socket which was bound to the server sockaddr_in
      */
     listen(listen_fd, LISTEN_BACKLOG);
+
+    //bind a signal to SIGUSR1
+    signal(SIGUSR1, decrement_athread);
 
     while(1)
     {
