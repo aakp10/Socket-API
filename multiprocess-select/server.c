@@ -11,6 +11,8 @@
 #include <pthread.h>
 #include <signal.h>
 #include <wait.h>
+#include <sys/select.h>
+#include <errno.h>
 
 #define LISTEN_BACKLOG 9
 #define MAXBUFLEN 80
@@ -20,8 +22,8 @@ struct thread_args{
     struct sockaddr_in *client_addr;
 };
 
-int threads_created = 0;
-int active_threads = 0;
+int processes_created = 0;
+int active_processes = 0;
 
 void
 get_greetings(char *greetings)
@@ -50,11 +52,13 @@ async_wait(int signum)
     pid_t child_exited;
     if(signum == SIGCHLD)
     {
-        active_threads--;
+        active_processes--;
         child_exited = wait(&child_exit_status);
-        printf("Child exited with pid:%d with a status %d", child_exited, child_exit_status);
+        if (WIFEXITED(child_exit_status)) {
+            printf("Child exited with pid:%d with a status %d\n", child_exited, WEXITSTATUS(child_exit_status));
+        }
     }
-    printf("Active Threads: %d Total Threads: %d\n", active_threads, threads_created);
+    printf("Active processes: %d Total processes: %d\n", active_processes, processes_created);
 }
 
 void
@@ -89,7 +93,7 @@ process_request(int connection_fd, struct sockaddr_in client_sockaddr )
         write(connection_fd, w_buffer, strlen(w_buffer));
         //printf("%s \n", w_buffer);
     }
-    //active_threads--;
+    //active_processes--;
     close(connection_fd);
     printf("IP:%s:%d\n",inet_ntoa(client_sockaddr.sin_addr), client_sockaddr.sin_port);
 }
@@ -156,6 +160,12 @@ start_server(uint16_t port)
     //bind a signal to SIGUSR1
     signal(SIGCHLD, async_wait);
 
+    fd_set readfs;
+    struct timeval select_timeout;
+    select_timeout.tv_sec = 10;
+    FD_ZERO(&readfs);
+    int maxfd = listen_fd;
+
     while(1)
     {
         /*Accept the first connection in the pending connection
@@ -166,18 +176,33 @@ start_server(uint16_t port)
          * client_sockaddr : ptr to store the peer sockaddr struct
          * len: how many bytes to be filled into the peer sockect addr struct
          */
-        connection_fd = accept(listen_fd, (struct sockaddr *) &client_sockaddr, &len);
-        /*spawn the server*/
-        active_threads++;
-        threads_created++;
-        printf("Active Threads: %d Total Threads: %d\n", active_threads, threads_created);
-        if (fork()==0) {
-            close(listen_fd);
-            process_request(connection_fd, client_sockaddr);
-            close(connection_fd);
-            exit(2);
+        //FD_CLR(listen_fd, &readfs);
+        //printf("select to be invoked");
+        FD_SET(listen_fd, &readfs);
+        int fd_set_count = select(maxfd+1, &readfs, NULL, NULL, &select_timeout);
+        if(fd_set_count == -1 && errno != EINTR)
+            perror("select failed");
+        else if(fd_set_count)
+        {
+            printf("select triggered");
+            /* This is kinda redundant as we just have one fd to be inspected and fd_set_count >0 will be due to this fd getting ready*/
+            if(FD_ISSET(listen_fd, &readfs))
+            {
+                /*Accept now*/
+                connection_fd = accept(listen_fd, (struct sockaddr *) &client_sockaddr, &len);
+                /*spawn the server*/
+                active_processes++;
+                processes_created++;
+                printf("Active processes: %d Total processes: %d\n", active_processes, processes_created);
+                if (fork()==0) {
+                    close(listen_fd);
+                    process_request(connection_fd, client_sockaddr);
+                    close(connection_fd);
+                    exit(2);
+                }
+                close(connection_fd);
+            }
         }
-        close(connection_fd);
     }
     return 1;
 }
