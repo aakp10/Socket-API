@@ -11,10 +11,10 @@
 #include <fcntl.h>
 #include <sys/time.h>
 
-#define MAXLEN 6000
+#define MAXLEN 100
 #define PORT 80
-#define CHUNK_SIZE 100
-#define timeout 1
+#define BLOCK_SIZE 100
+#define timeout 5
 
 char*
 get_dns_lookup(char *domain)
@@ -77,16 +77,15 @@ int write_to_server(int connection_fd, char *path, char *host_ip)
     char http_request[MAXLEN];
     ssize_t bytes_read;
     //fgets(r_buffer, MAXLEN, stdin);
-    /**
+    /**		memset(block ,0 , BLOCK_SIZE);
      * Write to the socket
      * fd: of socket in estd connection
      * buffer ptr: stores the data to be written
      * len of buffer: how many bytes to be written across the socket
      */
-    sprintf(http_request, "GET /%s HTTP/1.1\r\nHost: %s\r\nContent-Type: text/plain\r\n\r\n", path, host_ip);
+    sprintf(http_request, "GET %s/ HTTP/1.1\r\nHost: %s\r\nContent-Type: text/plain\r\n\r\n", path, host_ip);
     printf("http request\n%s", http_request);
     write(connection_fd, http_request, strlen(http_request));
-    char http_response[MAXLEN];
 
     /**
      * read data on the socket
@@ -94,70 +93,47 @@ int write_to_server(int connection_fd, char *path, char *host_ip)
      * buffer ptr: to which the data read is stored
      * len: bytes to be read into the buffer
      */
-    /*
-    USe this for continuous echo to server from stdin
-    */
-    char filename[40];
     //if()
-    FILE *index = fopen("index", "w+");
-   /* (bytes_read = read(connection_fd, http_response, MAXLEN));
-    {
-        http_response[bytes_read] = '\0';
-        fputs(http_response, index);
-    }
-*/
-    /*	int size_recv , total_size= 0;
-	char block[CHUNK_SIZE];
-		
-		while((size_recv =  read(connection_fd , block , CHUNK_SIZE)) > 0)
-		{fputs(block, index);
-			memset(block ,0 , CHUNK_SIZE);	//clear the variable
-		}
-*/
-int size_recv , total_size= 0;
-	struct timeval begin , now;
-	char block[CHUNK_SIZE];
+    FILE *index = fopen("index.html", "w+");
+    struct timeval begin , curr;
+    int size_recv ;
+    int total_size= 0;
+	char block[BLOCK_SIZE];
 	double timediff;
-	
-	//make socket non blocking
 	fcntl(connection_fd, F_SETFL, O_NONBLOCK);
-	
-	//beginning time
 	gettimeofday(&begin , NULL);
-	
-	while(1)
+	while(4)
 	{
-		gettimeofday(&now , NULL);
-		
-		//time elapsed in seconds
-		timediff = (now.tv_sec - begin.tv_sec) + 1e-6 * (now.tv_usec - begin.tv_usec);
-		
-		//if you got some data, then break after timeout
+		gettimeofday(&curr , NULL);
+		timediff =1e-6 * (curr.tv_usec - begin.tv_usec) + (curr.tv_sec - begin.tv_sec);
+        memset(block ,0 , BLOCK_SIZE);
 		if( total_size > 0 && timediff > timeout )
 		{
 			break;
 		}
-		
-		//if you got no data at all, wait a little longer, twice the timeout
-		else if( timediff > timeout*2)
+
+		if((size_recv =  read(connection_fd , block , BLOCK_SIZE ) )< 0)
 		{
-			break;
-		}
-		
-		memset(block ,0 , CHUNK_SIZE);	//clear the variable
-		if((size_recv =  read(connection_fd , block , CHUNK_SIZE ) )< 0)
-		{
-			//if nothing was received then we want to wait a little before trying again, 0.1 seconds
-			usleep(100000);
+			usleep(200000);
 		}
 		else
 		{
-			total_size += size_recv;
+            block[size_recv] = '\0';
 			fputs(block, index);
-			//reset beginning time
+			total_size += size_recv;
 			gettimeofday(&begin , NULL);
 		}
 	}
+
+    fclose(index);
+    int version, code;
+    char status[30];
+    char line[50];
+    index = fopen("index.html", "r");
+   fscanf(index,"%[^\n]", line);
+    sscanf(line, "HTTP/1.1 %d %s",  &code, status);
+    printf("status code %d message %s\n", code, status);
+    printf("file name is index.html");
     fclose(index);
     return 0;
 }
@@ -168,15 +144,11 @@ get_domain(char *url_val, char *domain, char *path)
     char url[100];
     strcpy(url, url_val);
     printf("%s\n", url_val);
-    /*if(strncmp(url, "https://", strlen("https://")) == 0) {
-        sscanf(url, "https://%s", path);
+    if(strncmp(url, "https://", strlen("https://")) == 0) {
+        printf("can't handle https\n");
+        exit(0);
     }
-    else if(strncmp(url, "http://", strlen("http://")) == 0) {
-        sscanf(url, "http://%s", path);
-    }
-    else {
-        sscanf(url, "%s", path);
-    }*/
+
     char *dissect;
     int is_domain_set = 0;
     strcpy(path,"");
@@ -191,6 +163,7 @@ get_domain(char *url_val, char *domain, char *path)
             else {
                 if(!path_init)
                 {
+                    strcat(path,"/");
                     strcat(path, dissect);
                     path_init = 1;
                 }
@@ -198,8 +171,6 @@ get_domain(char *url_val, char *domain, char *path)
                     strcat(path,"/");
                     strcat(path, dissect);
                 }
-                
-
             }
         }
 
